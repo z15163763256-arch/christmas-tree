@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gesture Controlled Christmas Tree</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Helvetica Neue', sans-serif; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+        
+        /* UI 层 */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;
+            display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box;
+        }
+
+        .hud-text {
+            color: rgba(255, 215, 0, 0.8); /* 金色 */
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+            font-size: 14px; letter-spacing: 2px; text-transform: uppercase;
+        }
+
+        #status-indicator { font-size: 24px; font-weight: bold; color: #fff; text-align: center; margin-top: 20px;}
+        
+        /* 摄像头预览 (左下角，镜像反转) */
+        .input_video { 
+            position: absolute; bottom: 20px; left: 20px; width: 160px; height: 120px; 
+            border: 1px solid rgba(255, 215, 0, 0.3); transform: scaleX(-1); opacity: 0.5; border-radius: 8px;
+        }
+        
+        /* 隐藏的文件上传 */
+        #upload-btn {
+            pointer-events: auto; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 215, 0, 0.5);
+            color: #fff; padding: 10px 20px; cursor: pointer; backdrop-filter: blur(5px);
+            transition: all 0.3s; margin-bottom: 20px; text-align: center; width: fit-content; align-self: flex-end;
+        }
+        #upload-btn:hover { background: rgba(255, 215, 0, 0.2); box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
+
+        /* 手势光标 */
+        #hand-cursor {
+            position: absolute; width: 40px; height: 40px;
+            border: 2px solid rgba(255, 255, 255, 0.8); border-radius: 50%;
+            transform: translate(-50%, -50%); transition: transform 0.1s, border-color 0.2s;
+            pointer-events: none; display: none;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        #hand-cursor.active { border-color: #ff0044; background: rgba(255, 0, 68, 0.1); transform: translate(-50%, -50%) scale(0.8); }
+
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; z-index: 20; }
+    </style>
+</head>
+<body>
+
+    <div id="loading">正在加载视觉模型...</div>
+
+    <div id="ui-layer">
+        <div class="hud-text">Three.js x MediaPipe // Christmas Edition</div>
+        <div id="status-indicator">等待手势...</div>
+        <label id="upload-btn">
+            上传照片 (生成云)
+            <input type="file" id="file-input" multiple accept="image/*" style="display: none;">
+        </label>
+    </div>
+
+    <div id="hand-cursor"></div>
+
+    <video class="input_video" playsinline></video>
+
+    <div id="canvas-container"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // --- Configuration ---
+        const CONFIG = {
+            particleCount: 400, // Ornaments count
+            photoCount: 12,     // Default placeholders
+            colors: {
+                green: 0x1a472a, // Matte Dark Green
+                gold: 0xffd700,  // Metallic Gold
+                red: 0x8b0000,   // Christmas Red
+                light: 0xfff5e1
+            },
+            treeHeight: 25,
+            treeRadius: 10
+        };
+
+        // --- Global State ---
+        const state = {
+            mode: 'TREE', // TREE, SCATTER, ZOOM
+            handVisible: false,
+            handPos: { x: 0, y: 0 }, // Normalized 0-1
+            isPinching: false,
+            activePhotoIndex: -1
+        };
+
+        // --- Three.js Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = 
