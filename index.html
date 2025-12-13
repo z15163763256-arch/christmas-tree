@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Christmas Tree V4.0 (High Performance)</title>
+    <title>Christmas Tree V5.1 (Better Photo Placement)</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #020202; font-family: 'Arial', sans-serif; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
         
-        /* UI 界面优化 */
+        /* UI 界面 */
         #ui-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;
             display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box;
@@ -73,7 +73,7 @@
     </div>
 
     <div id="ui-layer">
-        <div class="hud-text">V4.0 HIGH PERFORMANCE</div>
+        <div class="hud-text">V5.1 OPTIMIZED PLACEMENT</div>
         <div id="status-indicator">等待手势指令</div>
         <label id="upload-btn">
             📷 上传照片挂上树
@@ -106,94 +106,81 @@
 
         // --- 核心配置 ---
         const CONFIG = {
-            count: 600,         // 粒子总数
-            photoLimit: 20,     // 照片最大数量
-            colors: [0xffd700, 0xc0c0c0, 0xff0044, 0x1a472a], // 金, 银, 红, 绿
+            count: 600,         
+            colors: [0xffd700, 0xc0c0c0, 0xff0044, 0x1a472a],
             treeHeight: 35,
             treeRadius: 14,
             scatterRadius: 25,
-            speed: 0.08         // 动画速度系数
+            speed: 0.08         
         };
 
         const state = {
-            mode: 'TREE', // TREE, SCATTER, ZOOM
+            mode: 'TREE', 
             handVisible: false,
             handPos: { x: 0.5, y: 0.5 },
             isPinching: false,
             activePhoto: null
         };
 
-        // --- 1. 场景与高亮光照 (解决画面暗) ---
+        // --- 1. 场景与光照 ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x000000, 0.012); // 黑背景配合雾气
+        scene.fog = new THREE.FogExp2(0x000000, 0.012); 
 
         const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
         camera.position.set(0, 5, 55);
 
         const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
-        // 性能优化：限制像素比，防止4K屏卡顿
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
         renderer.setSize(window.innerWidth, window.innerHeight);
-        // 色调映射优化：让亮部更亮
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1.3;
         container.appendChild(renderer.domElement);
 
-        // 灯光加强
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // 环境光增强
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); 
         scene.add(ambientLight);
 
-        const dirLight = new THREE.DirectionalLight(0xffeebb, 1.5); // 主光源
+        const dirLight = new THREE.DirectionalLight(0xffeebb, 1.5); 
         dirLight.position.set(20, 50, 20);
         scene.add(dirLight);
 
-        const pointLight = new THREE.PointLight(0xffd700, 2, 50); // 局部补光
+        const pointLight = new THREE.PointLight(0xffd700, 2, 50); 
         pointLight.position.set(0, 10, 10);
         scene.add(pointLight);
 
         // --- 2. 后期处理 (Bloom) ---
         const renderScene = new RenderPass(scene, camera);
-        // 分辨率减半以提升性能
         const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth/2, window.innerHeight/2), 1.5, 0.4, 0.85);
-        bloomPass.threshold = 0.15; // 阈值降低，更容易发光
-        bloomPass.strength = 1.2;
+        bloomPass.threshold = 0.15; 
+        bloomPass.strength = 1.3; 
         bloomPass.radius = 0.6;
 
         const composer = new EffectComposer(renderer);
         composer.addPass(renderScene);
         composer.addPass(bloomPass);
 
-        // --- 3. 实例化渲染 (解决卡顿) ---
-        // 使用 InstancedMesh 一次性渲染数百个球体
+        // --- 3. 圣诞树粒子系统 ---
         const geometry = new THREE.SphereGeometry(0.4, 16, 16);
         const material = new THREE.MeshStandardMaterial({
             color: 0xffffff, roughness: 0.3, metalness: 0.8,
-            emissive: 0x222222 // 自发光，防止太暗
+            emissive: 0x222222 
         });
         
         const instancedMesh = new THREE.InstancedMesh(geometry, material, CONFIG.count);
         instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         scene.add(instancedMesh);
 
-        // 预计算数据
         const dummy = new THREE.Object3D();
-        const colorsData = [];
-        const targets = {
-            tree: [],
-            scatter: []
-        };
+        const targets = { tree: [], scatter: [] };
 
-        // 初始化位置数据
+        // 初始化粒子位置
         const _color = new THREE.Color();
         for (let i = 0; i < CONFIG.count; i++) {
-            // 颜色
             const colorHex = CONFIG.colors[Math.floor(Math.random() * CONFIG.colors.length)];
             _color.setHex(colorHex);
             instancedMesh.setColorAt(i, _color);
-            colorsData.push(_color.clone());
 
-            // 树形态坐标 (圆锥螺旋)
+            // 树形态 (i=0为底部, i=count为顶部)
             const hRatio = i / CONFIG.count;
             const r = (1 - hRatio) * CONFIG.treeRadius + 0.5;
             const theta = i * 0.8; 
@@ -202,7 +189,7 @@
             const z = r * Math.sin(theta);
             targets.tree.push(new THREE.Vector3(x, y, z));
 
-            // 散开形态坐标 (随机球体)
+            // 散开形态
             const sr = CONFIG.scatterRadius * Math.cbrt(Math.random());
             const phi = Math.acos(2 * Math.random() - 1);
             const sa = 2 * Math.PI * Math.random();
@@ -212,17 +199,54 @@
                 sr * Math.cos(phi)
             ));
             
-            // 初始设为树
             dummy.position.set(x, y, z);
             dummy.updateMatrix();
             instancedMesh.setMatrixAt(i, dummy.matrix);
         }
         instancedMesh.instanceColor.needsUpdate = true;
-
-        // 当前粒子的实时位置数组
         const currentPositions = targets.tree.map(v => v.clone());
 
-        // --- 4. 照片墙逻辑 (独立Mesh) ---
+        // --- 4. 🌟 金色顶星 ---
+        function createTopStar() {
+            const shape = new THREE.Shape();
+            const points = 5;
+            const outerRadius = 2.0; 
+            const innerRadius = 0.8; 
+
+            for (let i = 0; i < points * 2; i++) {
+                const angle = (i / points) * Math.PI;
+                const r = (i % 2 === 0) ? outerRadius : innerRadius;
+                if (i === 0) shape.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
+                else shape.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+            }
+            shape.closePath();
+
+            const starGeo = new THREE.ExtrudeGeometry(shape, {
+                depth: 0.5, bevelEnabled: true, bevelThickness: 0.2, bevelSize: 0.1, bevelSegments: 2
+            });
+            starGeo.center();
+
+            const starMat = new THREE.MeshStandardMaterial({
+                color: 0xffd700,
+                emissive: 0xffaa00,
+                emissiveIntensity: 2.0, 
+                metalness: 1.0,
+                roughness: 0.1
+            });
+
+            const mesh = new THREE.Mesh(starGeo, starMat);
+            mesh.userData = {
+                treePos: new THREE.Vector3(0, CONFIG.treeHeight / 2 + 1.5, 0),
+                scatterPos: new THREE.Vector3(0, 10, 0), 
+                rotationSpeed: 0.02
+            };
+            
+            scene.add(mesh);
+            return mesh;
+        }
+        const topStar = createTopStar();
+
+        // --- 5. 照片墙逻辑 (已优化排列) ---
         const photos = [];
         const photoGroup = new THREE.Group();
         scene.add(photoGroup);
@@ -232,9 +256,14 @@
             const mat = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
             const mesh = new THREE.Mesh(photoGeo, mat);
             
-            // 随机挂载点
-            const idx = Math.floor(Math.random() * CONFIG.count);
-            const treePos = targets.tree[idx].clone().multiplyScalar(1.2); // 稍微靠外
+            // --- 核心修改：限制照片生成高度 ---
+            // 我们只从树的下 70% 的粒子中随机选择位置挂载照片
+            // 这样可以确保照片不会出现在树的顶部区域
+            const maxAllowedIndex = Math.floor(CONFIG.count * 0.7); 
+            const idx = Math.floor(Math.random() * maxAllowedIndex);
+            
+            // 获取该粒子的位置，并向外推一点
+            const treePos = targets.tree[idx].clone().multiplyScalar(1.25);
             const scatterPos = targets.scatter[idx].clone();
 
             mesh.userData = {
@@ -243,67 +272,75 @@
                 originalScale: 1
             };
             mesh.position.copy(treePos);
-            mesh.lookAt(0,0,0);
+            // 让照片稍微朝上一点，看起来更自然
+            mesh.lookAt(0, treePos.y + 5, 0);
+            
             photoGroup.add(mesh);
             photos.push(mesh);
         }
 
-        // 默认生成几张色块图
         for(let i=0; i<8; i++) {
             const cvs = document.createElement('canvas');
             cvs.width=200; cvs.height=300;
             const ctx = cvs.getContext('2d');
-            ctx.fillStyle = `hsl(${Math.random()*360}, 70%, 50%)`;
+            ctx.fillStyle = `hsl(${Math.random()*360}, 70%, 40%)`; // 稍微深一点的颜色
             ctx.fillRect(0,0,200,300);
             ctx.fillStyle='white'; ctx.font='40px Arial'; ctx.fillText('Photo', 40, 150);
             createPhoto(new THREE.CanvasTexture(cvs), i);
         }
 
-        // 上传处理
         document.getElementById('file-input').addEventListener('change', (e) => {
             const files = e.target.files;
             if(!files.length) return;
             new THREE.TextureLoader().load(URL.createObjectURL(files[0]), (tex) => {
                 createPhoto(tex, photos.length);
-                state.mode = 'SCATTER'; // 上传后自动散开
+                state.mode = 'SCATTER'; 
             });
         });
 
-        // --- 5. 动画循环 (高效插值) ---
+        // --- 6. 动画循环 ---
         const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
         
         function animate() {
             requestAnimationFrame(animate);
 
-            // A. 粒子动画 (InstancedMesh 更新)
+            // A. 星星动画
+            if (topStar) {
+                const target = state.mode === 'TREE' ? topStar.userData.treePos : topStar.userData.scatterPos;
+                topStar.position.lerp(target, CONFIG.speed);
+                topStar.rotation.y += topStar.userData.rotationSpeed;
+                if (state.mode === 'SCATTER') {
+                    topStar.rotation.z += 0.01;
+                    topStar.rotation.x += 0.01;
+                } else {
+                    topStar.rotation.z *= 0.9; 
+                    topStar.rotation.x *= 0.9;
+                }
+            }
+
+            // B. 粒子动画
             const targetArr = state.mode === 'TREE' ? targets.tree : targets.scatter;
-            
             for (let i = 0; i < CONFIG.count; i++) {
                 const current = currentPositions[i];
                 const target = targetArr[i];
                 
-                // 快速插值
                 current.x += (target.x - current.x) * CONFIG.speed;
                 current.y += (target.y - current.y) * CONFIG.speed;
                 current.z += (target.z - current.z) * CONFIG.speed;
 
-                // 简单的自旋转效果 (通过位置微调模拟)
                 dummy.position.copy(current);
                 if(state.mode === 'SCATTER') dummy.rotation.set(current.x, current.y, 0);
                 else dummy.rotation.set(0,0,0);
-                
-                dummy.scale.setScalar(1); // 保持大小
+                dummy.scale.setScalar(1);
                 dummy.updateMatrix();
                 instancedMesh.setMatrixAt(i, dummy.matrix);
             }
             instancedMesh.instanceMatrix.needsUpdate = true;
 
-            // B. 照片动画
+            // C. 照片动画
             photos.forEach(photo => {
                 let target;
                 if(state.activePhoto === photo) {
-                    // 选中放大模式
                     const camDir = new THREE.Vector3();
                     camera.getWorldDirection(camDir);
                     target = camera.position.clone().add(camDir.multiplyScalar(10));
@@ -311,13 +348,18 @@
                     photo.scale.setScalar(THREE.MathUtils.lerp(photo.scale.x, 2.5, 0.1));
                 } else {
                     target = (state.mode === 'TREE') ? photo.userData.treePos : photo.userData.scatterPos;
-                    photo.lookAt(0,0,0);
+                    // 树形态下，让照片面朝外并稍微向上
+                    if (state.mode === 'TREE') {
+                         photo.lookAt(0, photo.position.y + 5, 0);
+                    } else {
+                         photo.lookAt(0,0,0);
+                    }
                     photo.scale.setScalar(THREE.MathUtils.lerp(photo.scale.x, 1, 0.1));
                 }
                 photo.position.lerp(target, CONFIG.speed);
             });
 
-            // C. 相机交互
+            // D. 相机交互
             if(state.handVisible && state.mode === 'SCATTER' && !state.activePhoto) {
                 const targetX = (state.handPos.x - 0.5) * 80;
                 const targetY = (0.5 - state.handPos.y) * 40;
@@ -330,14 +372,13 @@
         }
         animate();
 
-        // --- 6. MediaPipe 逻辑 (优化加载) ---
+        // --- 7. MediaPipe (保持不变) ---
         const videoElement = document.getElementsByClassName('input_video')[0];
         const statusDiv = document.getElementById('status-indicator');
         const cursor = document.getElementById('hand-cursor');
         const loadingScreen = document.getElementById('loading-screen');
         const loadingText = document.getElementById('loading-text');
 
-        // 超时检测
         setTimeout(() => {
             if(loadingScreen.style.display !== 'none') {
                 loadingText.innerHTML = "⚠️ 加载过慢<br>请检查网络或点击允许摄像头";
@@ -345,28 +386,23 @@
         }, 15000);
 
         function onResults(results) {
-            // 首次成功回调，隐藏加载层
             if(loadingScreen.style.display !== 'none') loadingScreen.style.display = 'none';
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 state.handVisible = true;
                 const lm = results.multiHandLandmarks[0];
                 
-                // 计算手掌中心
                 const x = (lm[0].x + lm[5].x + lm[17].x) / 3;
                 const y = (lm[0].y + lm[5].y + lm[17].y) / 3;
                 state.handPos = {x, y};
 
-                // 光标跟随
                 cursor.style.display = 'block';
                 cursor.style.left = `${(1-x)*100}%`;
                 cursor.style.top = `${y*100}%`;
 
-                // 动作检测
                 const pinchDist = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y);
-                const isFist = Math.hypot(lm[12].y - lm[0].y) < 0.25; // 简单握拳检测
+                const isFist = Math.hypot(lm[12].y - lm[0].y) < 0.25; 
 
-                // 状态机
                 if (pinchDist < 0.08) {
                     state.isPinching = true;
                     cursor.classList.add('active');
@@ -375,7 +411,7 @@
                 } else {
                     state.isPinching = false;
                     cursor.classList.remove('active');
-                    state.activePhoto = null; // 释放照片
+                    state.activePhoto = null; 
 
                     if (isFist) {
                         state.mode = 'TREE';
@@ -392,7 +428,6 @@
             }
         }
 
-        // 射线检测
         function checkInteraction(x, y) {
             raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
             const intersects = raycaster.intersectObjects(photos);
@@ -401,15 +436,13 @@
             }
         }
 
-        // 初始化 MediaPipe
         const hands = new Hands({locateFile: (file) => {
-            // 使用 unpkg 源，通常比 jsdelivr 更稳
             return `https://unpkg.com/@mediapipe/hands/${file}`;
         }});
         
         hands.setOptions({
             maxNumHands: 1,
-            modelComplexity: 0, // 降低模型精度以换取速度
+            modelComplexity: 0, 
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5
         });
@@ -418,7 +451,7 @@
 
         const cameraUtils = new Camera(videoElement, {
             onFrame: async () => { await hands.send({image: videoElement}); },
-            width: 320, height: 240 // 降低摄像头分辨率处理，极大提升性能
+            width: 320, height: 240 
         });
         
         try {
