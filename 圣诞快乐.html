@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>圣诞快乐 🎄</title>
+    <style>
+        :root {
+            --background-color: #050b1a;
+            --tree-color: #1b4d2e;
+            --tree-light: #2d6a4f;
+            --star-color: #ffd700;
+        }
+
+        body {
+            background-color: var(--background-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+        }
+
+        .container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* 顶部星星 */
+        .star {
+            width: 50px;
+            height: 50px;
+            background: var(--star-color);
+            clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+            box-shadow: 0 0 40px var(--star-color);
+            z-index: 10;
+            animation: star-glow 2s infinite alternate;
+        }
+
+        /* 圣诞树主体 */
+        .tree-layer {
+            width: 0;
+            height: 0;
+            border-left: 60px solid transparent;
+            border-right: 60px solid transparent;
+            border-bottom: 80px solid var(--tree-color);
+            margin-top: -30px;
+            position: relative;
+            filter: drop-shadow(0 10px 10px rgba(0,0,0,0.5));
+        }
+
+        .layer-1 { border-left-width: 60px; border-right-width: 60px; border-bottom-width: 80px; z-index: 5; }
+        .layer-2 { border-left-width: 90px; border-right-width: 90px; border-bottom-width: 110px; z-index: 4; }
+        .layer-3 { border-left-width: 120px; border-right-width: 120px; border-bottom-width: 140px; z-index: 3; }
+        .layer-4 { border-left-width: 150px; border-right-width: 150px; border-bottom-width: 170px; z-index: 2; }
+
+        /* 树干 */
+        .trunk {
+            width: 40px;
+            height: 50px;
+            background: #4d2926;
+            margin-top: -10px;
+            border-radius: 0 0 5px 5px;
+        }
+
+        /* 彩灯 */
+        .light {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            z-index: 10;
+        }
+
+        .light:nth-child(odd) { background: #ff4d4d; box-shadow: 0 0 10px #ff4d4d; animation: flash 1s infinite; }
+        .light:nth-child(even) { background: #00f2ff; box-shadow: 0 0 10px #00f2ff; animation: flash 1.5s infinite; }
+
+        /* 雪花 */
+        .snow {
+            position: absolute;
+            top: -10vh;
+            color: white;
+            font-size: 1.5em;
+            user-select: none;
+            z-index: 1;
+            animation: fall linear infinite;
+        }
+
+        /* 祝福文字 */
+        .message {
+            margin-top: 30px;
+            color: #fff;
+            text-align: center;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+            animation: fadeIn 3s ease-in;
+        }
+
+        @keyframes star-glow {
+            from { transform: scale(1); filter: brightness(1); }
+            to { transform: scale(1.2); filter: brightness(1.5); }
+        }
+
+        @keyframes flash {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.8); }
+        }
+
+        @keyframes fall {
+            to { transform: translateY(110vh) rotate(360deg); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="star"></div>
+        <div class="tree-layer layer-1">
+            <div class="light" style="top: 40px; left: -10px;"></div>
+            <div class="light" style="top: 60px; left: 15px;"></div>
+        </div>
+        <div class="tree-layer layer-2">
+            <div class="light" style="top: 50px; left: -40px;"></div>
+            <div class="light" style="top: 80px; left: 30px;"></div>
+            <div class="light" style="top: 40px; left: 10px;"></div>
+        </div>
+        <div class="tree-layer layer-3">
+            <div class="light" style="top: 70px; left: -70px;"></div>
+            <div class="light" style="top: 100px; left: 50px;"></div>
+            <div class="light" style="top: 40px; left: -20px;"></div>
+            <div class="light" style="top: 90px; left: -30px;"></div>
+        </div>
+        <div class="tree-layer layer-4">
+            <div class="light" style="top: 50px; left: -110px;"></div>
+            <div class="light" style="top: 120px; left: 80px;"></div>
+            <div class="light" style="top: 80px; left: 0px;"></div>
+            <div class="light" style="top: 130px; left: -60px;"></div>
+        </div>
+        <div class="trunk"></div>
+
+        <div class="message">
+            <h1>Merry Christmas</h1>
+            <p>愿你的生活像这棵树一样闪闪发光</p>
+        </div>
+    </div>
+
+    <script>
+        // 动态生成雪花
+        function createSnowflake() {
+            const snowflake = document.createElement('div');
+            snowflake.classList.add('snow');
+            snowflake.innerHTML = '❄';
+            snowflake.style.left = Math.random() * 100 + 'vw';
+            snowflake.style.animationDuration = Math.random() * 3 + 2 + 's';
+            snowflake.style.opacity = Math.random();
+            snowflake.style.fontSize = Math.random() * 10 + 10 + 'px';
+
+            document.body.appendChild(snowflake);
+
+            setTimeout(() => {
+                snowflake.remove();
+            }, 5000);
+        }
+
+        setInterval(createSnowflake, 100);
+    </script>
+</body>
+</html>
